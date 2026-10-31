@@ -1,0 +1,19 @@
+cat > .gitignore <<'EOF'
+# macOS metadata
+.DS_Store
+._*
+
+# Python environment and cache
+.venv/
+__pycache__/
+*.py[cod]
+
+# Local credentials
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+EOF

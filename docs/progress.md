@@ -15,6 +15,8 @@ deploy it on AWS.
 | 4 | .gitignore configured | Verified |
 | 5 | Python 3.11 virtual environment | Verified: Python 3.11.15 runs from the project .venv |
 | 6 | Initial folders and progress document | Verified: folders created; Git detects docs and src |
+| 7 | Initial Git commit | Verified: commit 04d9289 |
+| 8 | Architecture documentation | In progress |
 
 ## Decisions
 

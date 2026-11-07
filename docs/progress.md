@@ -5,7 +5,7 @@
 Build an e-commerce analytics platform locally, then validate and
 deploy it on AWS.
 
-Last updated: 2026-11-01 (Asia/Kolkata).
+Last updated: 2026-11-07 (Asia/Kolkata).
 
 ## Working agreement
 
@@ -31,10 +31,11 @@ Last updated: 2026-11-01 (Asia/Kolkata).
 | 6 | Initial folders and progress document | Verified: folders created; Git detects docs and src |
 | 7 | Initial Git commit | Verified: commit 04d9289 |
 | 8 | Architecture documentation | Verified: document reviewed; committed as 2c75425 |
-| 9 | Project README | Written and reviewed locally; included in the prepared end-of-day Git commands |
+| 9 | Project README | Written and reviewed locally; committed as 0a68b79 |
 | 10 | Source PostgreSQL with Docker Compose | Verified: valid Compose configuration, healthy container, successful SQL connection, UTC timezone |
-| 11 | Customers source table | Schema verified in PostgreSQL; insert/update smoke-test output not yet reviewed |
-| 12 | Categories and products source tables | Schema and corrective migration results verified; relationship smoke-test output not yet reviewed |
+| 11 | Customers source table | Schema verified; insert/update timestamp behavior and rollback verified from user output |
+| 12 | Categories and products source tables | Schema and corrective migration results verified; catalog smoke check reported complete; four constraint checks and rollback confirmed by user |
+| 13 | Orders and order items source tables | User-created SQL file reviewed; migration execution, installed schema, and runtime verification pending |
 
 ## Verification evidence
 
@@ -58,8 +59,8 @@ Last updated: 2026-11-01 (Asia/Kolkata).
   case-insensitive unique email index, and updated_at trigger.
 - The installed public.set_updated_at() function matches the SQL file and
   assigns clock_timestamp() to NEW.updated_at.
-- The customer table currently has zero rows, including zero setup-test rows.
-  This confirms its current state, not that the earlier smoke test was run.
+- On 2026-11-01, the customer table had zero rows, including zero setup-test
+  rows. This established its state at that time, not execution of a smoke test.
 - A later read-only check confirmed categories and products now exist with
   identity keys, indexes, and update triggers. Both tables contain zero rows.
 - Before migration 003, the catalog definitions used TIMESTAMP WITHOUT TIME
@@ -68,14 +69,30 @@ Last updated: 2026-11-01 (Asia/Kolkata).
   all six customer/catalog timestamp columns are TIMESTAMP WITH TIME ZONE;
   products_category_id_fk uses ON DELETE RESTRICT; products_price_valid
   excludes negative values and NaN; products_stock_nonnegative is present.
-- customers, categories, and products each contain zero rows. The database
-  remains healthy. These read-only checks verify schema and current counts;
+- At the 2026-11-01 end-of-day check, customers, categories, and products each
+  contained zero rows and the database was healthy. These read-only checks verify schema and counts;
   they do not replace insert/update or constraint-rejection smoke tests.
+- On 2026-11-07, supplied terminal output confirmed Docker engine recovery,
+  source-postgres Healthy, and a successful psql connection. The customer
+  test inserted one row with initial_timestamps_match = t, updated one row
+  to Mumbai with timestamp_advanced = t, completed ROLLBACK, and returned
+  remaining_test_rows = 0 for setup-test@example.test.
+- On 2026-11-07, the user confirmed the catalog constraint test produced the
+  supplied expected output: four PASS notices (negative price, NaN price,
+  negative stock, and restricted category deletion), followed by DO and
+  ROLLBACK. This is user-confirmed evidence; the raw transcript was not pasted
+  and the assistant did not execute the test.
+- End-of-day review on 2026-11-07 confirmed sql/source/004_orders.sql exists
+  and matches the supplied transactional migration: two tables, primary and
+  foreign keys, uniqueness/check constraints, four indexes, and two update
+  triggers. Migration execution and installed definitions were not checked.
 - git check-ignore confirms .env and macOS sidecar files are excluded.
 - End-of-day review confirmed SOURCE_DB_PASSWORD is blank in .env.example;
   the private .env is ignored and is not tracked by Git.
-- Local Git metadata shows main tracking origin/main, both at 2c75425.
-  The live GitHub repository was not rechecked during this update.
+- On 2026-11-07, local Git metadata shows main tracking origin/main at
+  0a68b79 (feat: add local PostgreSQL and initial source schema), with no
+  ahead/behind difference. The working tree was clean before this progress
+  update. The live GitHub repository was not fetched or independently checked.
 
 ## Decisions
 
@@ -86,6 +103,14 @@ Last updated: 2026-11-01 (Asia/Kolkata).
 - Use a daily Git review and commit instead of a commit after every step.
 - Customer email uniqueness is case-insensitive, implemented by the user's
   unique index on lower(email). This does not trim surrounding whitespace.
+- Step 13 design: one orders row per order and one order_items row per
+  numbered order line. Store unit_price on each item as the sale-time price;
+  changes to the product catalog must not recalculate historical orders.
+- Initial order amounts are INR merchandise totals after line discounts,
+  excluding tax and shipping charges. discount_amount is the discount for
+  the whole line, not a per-unit discount. Reconcile orders.total_amount
+  against SUM(quantity * unit_price - discount_amount) in later checks;
+  the table constraints alone do not enforce this cross-row equality.
 
 ## Issues resolved
 
@@ -100,17 +125,22 @@ Migration 003 corrects catalog timestamp types, replaces cascading category
 deletion with RESTRICT, and adds the missing stock and price checks. The
 installed database definitions were verified after these changes.
 
+On 2026-11-07, Docker initially could not reach its local daemon. After the
+user opened Docker Desktop, docker info returned a Server section, Compose
+reported source-postgres Healthy, and the customer SQL smoke check succeeded.
+
 ## Open issues
 
 The opening terminal wrapper has been removed from .gitignore, but a stray
 `EOF` remains on line 19. The user should remove that line while preserving
 the actual ignore patterns. Secret and metadata exclusion rules already work.
 
-Runtime verification still pending:
-- Review the customer insert/update smoke check, including the updated_at trigger.
-- Review the catalog join smoke check and test rejection of invalid values.
-- Schema definitions have been checked, but these runtime results have not
-  been provided or independently observed.
+Catalog runtime evidence:
+- The earlier insert/join/update check is reported complete by the user;
+  its terminal output has not been reviewed.
+- The user confirmed all four constraint PASS notices and the final ROLLBACK
+  matched the supplied expected output. These checks are no longer awaiting
+  user execution; their results were reported rather than independently run.
 
 ## Step 10 — setup and verification
 
@@ -142,7 +172,11 @@ Runtime verification still pending:
 - Verified the (updated_at, id) index for later incremental extraction.
 - Verified reusable public.set_updated_at() and the customers UPDATE trigger.
 - The SQL file wraps changes in a transaction.
-- Still awaiting evidence of the transaction-based insert/update smoke check.
+- On 2026-11-07, reviewed the user's successful transaction-based smoke check:
+  one customer inserted with matching initial timestamps; one customer
+  updated to Mumbai with updated_at > created_at; ROLLBACK completed;
+  zero rows remained for the test email. This verifies the insert/update
+  path and cleanup, not runtime rejection by every customer constraint.
 - The assistant has not written the SQL file or created the table.
 
 ## Step 12 — implementation and verification
@@ -172,8 +206,45 @@ Runtime verification still pending:
   products_stock_nonnegative enforces stock_quantity >= 0.
 - The migration wraps changes in a transaction and sets the session timezone
   locally to UTC.
-- Runtime catalog smoke-check results remain pending.
+- The catalog insert/join/update check is user-reported complete; its output
+  has not been reviewed. Constraint-check results are user-confirmed below.
 - Fresh setup will apply 001, 002, and 003 in order.
+
+### Catalog constraint checks — user confirmed expected output
+
+- Test negative price, NaN price, negative stock, and deletion of a category
+  that still has a product.
+- Use a temporary category/product pair within a transaction. A DO block
+  catches the expected check/foreign-key violations and reports PASS;
+  unexpected acceptance raises an error. End with ROLLBACK.
+- The user ran the SQL and reported "done same output" on 2026-11-07,
+  confirming all four PASS notices and the final ROLLBACK. Record these
+  checks as passed per user confirmation, not as assistant-executed tests.
+
+## Step 13 — orders and order items (SQL file reviewed)
+
+- The user created sql/source/004_orders.sql; end-of-day inspection confirmed
+  its contents match the supplied migration. Apply after migrations 001
+  through 003. The assistant has not created the file or database tables.
+- orders: identity id, customer_id, ordered_at, status, currency,
+  total_amount, created_at, and updated_at.
+- order_items: identity id, order_id, product_id, line_number, quantity,
+  unit_price, discount_amount, created_at, and updated_at.
+- Foreign keys link orders to customers and order items to orders/products;
+  use ON DELETE RESTRICT to protect referenced records.
+- Require unique (order_id, line_number), positive line numbers/quantities,
+  finite nonnegative money values, and line discounts no greater than
+  quantity * unit_price. NUMERIC(18,2) bounds monetary precision.
+- Limit currency to INR and order status to pending, confirmed, shipped,
+  delivered, or cancelled. Status membership does not enforce transitions
+  or establish whether an order has been paid; payments are a later step.
+- Store business order time separately from row creation/update timestamps;
+  use TIMESTAMPTZ throughout and reuse public.set_updated_at().
+- Add (updated_at, id) extraction indexes plus customer/product foreign-key
+  indexes. The unique order/line index also supports lookups by order_id.
+- Supplied transactional DDL and commands to apply it and inspect both tables.
+  File contents were reviewed; migration execution, installed definitions,
+  and runtime checks remain unverified.
 
 ## Daily log — 2026-10-31
 
@@ -229,12 +300,61 @@ Runtime verification still pending:
 - Preserve the existing .env exclusion; do not stage the private .env file.
 - Commands to review the staged summary, commit, push main, and verify Git
   status were supplied to the user.
-- Commit and push status: awaiting user execution. The assistant has not
-  staged, committed, or pushed these changes.
+- Commit and push status at handoff: awaiting user execution. On 2026-11-07,
+  local inspection confirmed commit 0a68b79 and main aligned with the locally
+  recorded origin/main. The assistant has not staged, committed, or pushed
+  these changes.
 - Session ended at the user's request. No new implementation step was started.
+
+## Daily log — 2026-11-07
+
+- Resumed at the pending customer/catalog runtime checks.
+- Verified the previous daily commit in local Git history and a clean working
+  tree before updating this document.
+- Reviewed the saved customer SQL and catalog correction migration.
+- Supplied the customer insert/update check for the user to run inside a
+  transaction ending with ROLLBACK. No database commands were executed by
+  the assistant in this session.
+- The initial Docker daemon connection failure was resolved after the user
+  opened Docker Desktop. Reviewed successful engine, container health, and
+  psql connection output.
+- Verified customer insert/update behavior: initial_timestamps_match = t,
+  city = Mumbai, timestamp_advanced = t, and remaining_test_rows = 0 after
+  ROLLBACK.
+- Supplied the catalog insert/join/update check. The user reported "done";
+  terminal output has not yet been supplied, so runtime verification remains
+  pending. Do not infer successful checks or rollback cleanup from this report.
+- Continued at the user's request with catalog constraint-check instructions;
+  supplied checks for negative/NaN prices, negative stock, and restricted
+  category deletion. The user subsequently confirmed the expected four PASS
+  notices, DO, and ROLLBACK with "done same output".
+- Rechecked .gitignore: the stray EOF line remains. Asked the user to remove
+  that line and save the file; cleanup remains pending for the daily review.
+- Supplied Step 13: orders/order_items migration, design explanations, and
+  apply/inspection commands. The user writes and runs the SQL; no application
+  code, SQL files, or database objects were modified by the assistant.
+- At the user's end-of-day request, reviewed the saved 004_orders.sql and
+  confirmed it matches the supplied migration. No migration or runtime-test
+  output was supplied for the new tables.
+
+### End-of-day Git handoff
+
+- Changes reviewed: docs/progress.md and sql/source/004_orders.sql.
+- Confirmed the private .env remains ignored and is not tracked by Git.
+- Prepared commit subject: feat: add orders and order items source schema
+- Prepared commands to stage only these two files, review the staged diff,
+  commit, push origin main, and check the resulting status.
+- Commit and push remain pending user execution. The assistant has not
+  staged, committed, pushed, or changed the database.
+- The stray EOF line in .gitignore remains a cleanup item for next session.
+- Stopped implementation work for the day at the user's request.
 
 ## Resume point
 
-Finish the pending customer/catalog runtime checks and remove the stray EOF
-line from .gitignore. Then introduce orders and order_items. Retain the
-local-first approach and daily Git review workflow.
+Confirm whether migration 004 was applied and inspect the installed tables
+before rerunning its CREATE TABLE statements. Then supply an order/items
+runtime check, including total calculation and sale-price preservation.
+Remove the stray EOF line during daily cleanup.
+The earlier catalog insert/join/update check remains user-reported complete,
+with its raw output unreviewed. Retain the local-first approach and daily Git
+review workflow.

@@ -1,0 +1,7 @@
+region = "ap-south-1"
+github_repository = "abhisheksd27/ShopLakehouse"
+image_tag = "bootstrap"
+deploy_services = false
+deploy_airflow = false
+# Set the existing account-wide GitHub OIDC provider ARN if already created.
+existing_oidc_provider_arn = ""

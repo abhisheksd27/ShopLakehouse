@@ -1,0 +1,2 @@
+-- Top three products in each category by delivered revenue.
+WITH sales AS (SELECT p.category_name,p.product_name,sum(i.line_amount) AS revenue FROM gold.fact_order_items i JOIN gold.fact_orders o USING(order_id) JOIN gold.dim_product p USING(product_id) WHERE o.status='delivered' GROUP BY p.category_name,p.product_id,p.product_name), ranked AS (SELECT *,dense_rank() OVER (PARTITION BY category_name ORDER BY revenue DESC) AS rank FROM sales) SELECT * FROM ranked WHERE rank<=3 ORDER BY category_name,rank;

@@ -1,0 +1,2 @@
+-- Month over month delivered revenue growth, using a window function.
+WITH monthly AS (SELECT date_trunc('month',business_date)::date AS month,sum(delivered_merchandise_revenue) AS revenue_inr FROM gold.daily_revenue GROUP BY 1), previous AS (SELECT *,lag(revenue_inr) OVER (ORDER BY month) AS prior_revenue FROM monthly) SELECT month,revenue_inr,round(100.0*(revenue_inr-prior_revenue)/nullif(prior_revenue,0),2) AS growth_percent FROM previous ORDER BY month;

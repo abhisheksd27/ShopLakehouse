@@ -1,0 +1,84 @@
+{
+  "name": "Build and scan images",
+  "on": {
+    "workflow_dispatch": {
+      "inputs": {
+        "environment": {
+          "type": "choice",
+          "options": [
+            "dev",
+            "prod"
+          ],
+          "default": "dev",
+          "required": true
+        }
+      }
+    }
+  },
+  "permissions": {
+    "contents": "read",
+    "id-token": "write"
+  },
+  "jobs": {
+    "images": {
+      "runs-on": "ubuntu-latest",
+      "environment": "${{ inputs.environment }}",
+      "strategy": {
+        "matrix": {
+          "image": [
+            "app",
+            "airflow"
+          ]
+        }
+      },
+      "steps": [
+        {
+          "uses": "actions/checkout@v4"
+        },
+        {
+          "uses": "docker/setup-qemu-action@v3"
+        },
+        {
+          "uses": "docker/setup-buildx-action@v3"
+        },
+        {
+          "uses": "aws-actions/configure-aws-credentials@v4",
+          "with": {
+            "role-to-assume": "${{ vars.AWS_IMAGE_ROLE_ARN }}",
+            "aws-region": "ap-south-1"
+          }
+        },
+        {
+          "uses": "aws-actions/amazon-ecr-login@v2",
+          "id": "login"
+        },
+        {
+          "uses": "docker/build-push-action@v6",
+          "with": {
+            "context": ".",
+            "file": "${{ matrix.image == 'airflow' && 'docker/airflow.Dockerfile' || 'Dockerfile' }}",
+            "platforms": "linux/arm64",
+            "push": false,
+            "tags": "${{ steps.login.outputs.registry }}/shoplakehouse-${{ inputs.environment }}/${{ matrix.image }}:${{ github.sha }}",
+            "build-args": "INSTALL_CLOUD=true",
+            "load": true
+          }
+        },
+        {
+          "uses": "aquasecurity/trivy-action@0.28.0",
+          "with": {
+            "image-ref": "${{ steps.login.outputs.registry }}/shoplakehouse-${{ inputs.environment }}/${{ matrix.image }}:${{ github.sha }}",
+            "format": "table",
+            "exit-code": "1",
+            "ignore-unfixed": true,
+            "severity": "CRITICAL,HIGH"
+          }
+        },
+        {
+          "name": "Push scanned image",
+          "run": "docker push \"${{ steps.login.outputs.registry }}/shoplakehouse-${{ inputs.environment }}/${{ matrix.image }}:${{ github.sha }}\""
+        }
+      ]
+    }
+  }
+}

@@ -1,67 +1,69 @@
 # ShopLakehouse
 
-A local-first e-commerce analytics platform built with Python,
-PostgreSQL, MinIO, PySpark, dbt, Airflow, and Metabase, with a
-planned deployment to AWS.
+A local-first e-commerce analytics platform: PostgreSQL, REST and CSV sources → immutable Bronze Parquet → validated PySpark Silver → dbt Gold → Metabase.
 
-## Business problem
+The repository includes the local implementation, Airflow orchestration, tests and AWS deployment code. See [progress](docs/progress.md) for measured verification; AWS infrastructure has **not** been deployed. This is a bounded portfolio implementation, not a production certification.
 
-An online retailer has transactional data in PostgreSQL,
-additional product information behind an API, and marketing
-data in CSV files.
+## Start locally
 
-ShopLakehouse will combine these sources into reliable
-reporting tables for sales, products, and customer behavior.
+Requires Docker Desktop, Python 3.11 and approximately 8 GB Docker memory for the core stack. Run optional Airflow and BI services separately if memory is limited.
 
-## Current status
+```sh
+python3.11 -m venv .venv
+.venv/bin/python -m pip install -e '.[dev]'
+.venv/bin/python scripts/setup_env.py
+make up
+make migrate
+make generate-data DAY=2026-11-13 ORDERS=100
+make run DAY=2026-11-13
+make status
+```
 
-Foundation and documentation are being established.
+For the existing lesson database, use `docker compose run --rm pipeline migrate --adopt-legacy` once instead of `make migrate`. Checksums prevent silently changing applied migrations. Never run `docker compose down -v` unless deliberately deleting local data.
 
-The data pipeline, dashboards, and AWS infrastructure are
-planned and have not yet been implemented.
+`make up` builds MinIO from a pinned official source tag because its registry images were unavailable during verification. The clean build helper also excludes macOS external-drive metadata and secrets.
 
-## Planned local data flow
+## Reliability
 
-1. Generate synthetic transactional, API, and CSV data.
-2. Extract source records with Python.
-3. Preserve raw records as Bronze Parquet files in MinIO.
-4. Clean and validate records with PySpark.
-5. Store accepted records in Silver and rejected records in quarantine.
-6. Load validated Silver records into analytics PostgreSQL.
-7. Build and test Gold business models with dbt.
-8. Publish validated results for Metabase dashboards.
-9. Automate the pipeline with Airflow.
+- A run writes immutable objects and isolated candidate schemas.
+- Silver checks account for accepted, rejected and duplicate rows.
+- HMAC protects customer identity; street addresses and review free text are removed from Silver.
+- dbt tests, freshness checks and source-to-Gold totals gate publication.
+- PostgreSQL swaps Gold views and advances watermarks in one transaction.
+- Failed runs retain the previous publication. Repeating generation for the same recorded batch does not add duplicate orders.
 
-## Planned analytics
+## Services and documentation
 
-- Daily revenue and average order value.
-- Product and category performance.
-- Customer purchase history and repeat purchase rate.
-- Cohort retention.
-- Cancellation and refund trends.
-- Marketing and website traffic trends.
+`make airflow` enables the daily DAG at 02:00 Asia/Kolkata. `make metabase` starts BI; then run `.venv/bin/python scripts/setup_metabase.py` after the first successful pipeline.
 
-## Planned AWS deployment
+| Document | Purpose |
+|---|---|
+| [Project document](docs/project-document.md) | Scope, architecture, data model and verified results |
+| [Execution steps](docs/execution-steps.md) | Numbered instructions for a fresh setup, resume and daily operation |
+| [Local setup](docs/local-setup.md) | Commands, ports, credentials and verification |
+| [Architecture](docs/architecture.md) | Data flow and design decisions |
+| [Data dictionary](docs/data-dictionary.md) | Contracts, keys, types and model grains |
+| [Operations runbook](docs/runbook.md) | Failures, replay, backfill and recovery |
+| [AWS deployment](docs/aws-deployment.md) | Reviewed deployment and teardown |
+| [Project handbook](docs/handbook.md) | Design explanations, security and scaling |
+| [Portfolio and interview guide](docs/portfolio.md) | Honest project presentation and questions |
+| [Progress](docs/progress.md) | What has actually been checked |
 
-- S3 for object storage.
-- Glue Data Catalog and Athena for lakehouse analytics.
-- RDS PostgreSQL for source data.
-- ECR and ECS Fargate for containers.
-- IAM, KMS, and Secrets Manager for access and secrets.
-- CloudWatch and CloudTrail for monitoring and auditing.
-- Terraform for infrastructure.
-- GitHub Actions for CI/CD.
+## Repository map
 
-Cloud-specific behavior will be tested separately from the local setup.
+```text
+src/shoplakehouse/    API, generator, ingestion, Silver, publication, CLI
+sql/source/          Ordered, checksummed source migrations
+sql/analytics/       Control ledger and business queries
+config/              Source contracts and saved dashboard definitions
+dbt/                 Staging, marts, snapshots, tests, macros, calendar seed
+dags/                Scheduled master and manual recovery DAGs
+docker/              Airflow and MinIO images
+scripts/             Setup, safe image builds, BI and cloud operations
+infra/               Terraform bootstrap, dev/prod and shared modules
+tests/               Unit, Spark, DAG and integration checks
+docs/                Architecture, instructions, runbooks and evidence
+.github/workflows/   Validation, image scan/push and reviewed deployment
+```
 
-## Documentation
-
-- [Architecture](docs/architecture.md)
-- [Build progress](docs/progress.md)
-
-## Development approach
-
-Build a small working pipeline first, verify its business results,
-then expand it.
-
-Each implementation step includes testing and a documentation update.
+Run `make test`, `make lint`, `make typecheck`, `make test-spark` (Java required), and `make test-integration` after publication. Money is INR decimal; reporting dates use Asia/Kolkata. Merchandise revenue and payment cash flow are separate measures.

@@ -1,0 +1,80 @@
+{
+  "version": 2,
+  "sources": [
+    {
+      "name": "silver",
+      "schema": "{{ env_var('SILVER_SCHEMA', 'silver') }}",
+      "tables": [
+        {
+          "name": "customers",
+          "loaded_at_field": "_loaded_at",
+          "freshness": {
+            "warn_after": {
+              "count": 12,
+              "period": "hour"
+            },
+            "error_after": {
+              "count": 24,
+              "period": "hour"
+            }
+          }
+        },
+        {
+          "name": "categories"
+        },
+        {
+          "name": "products",
+          "loaded_at_field": "_loaded_at",
+          "freshness": {
+            "warn_after": {
+              "count": 12,
+              "period": "hour"
+            },
+            "error_after": {
+              "count": 24,
+              "period": "hour"
+            }
+          }
+        },
+        {
+          "name": "addresses"
+        },
+        {
+          "name": "orders",
+          "loaded_at_field": "_loaded_at",
+          "freshness": {
+            "warn_after": {
+              "count": 12,
+              "period": "hour"
+            },
+            "error_after": {
+              "count": 24,
+              "period": "hour"
+            }
+          }
+        },
+        {
+          "name": "order_items"
+        },
+        {
+          "name": "payments"
+        },
+        {
+          "name": "shipments"
+        },
+        {
+          "name": "reviews"
+        },
+        {
+          "name": "product_api"
+        },
+        {
+          "name": "marketing"
+        },
+        {
+          "name": "web_traffic"
+        }
+      ]
+    }
+  ]
+}

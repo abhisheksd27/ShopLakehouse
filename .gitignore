@@ -1,19 +1,37 @@
-
-# macOS metadata
+# macOS
 .DS_Store
 ._*
-
-# Python environment and cache
+# Python/build
 .venv/
 __pycache__/
 *.py[cod]
-
-# Local credentials
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+# Secrets
 .env
 .env.*
 !.env.example
-
-# Logs
+# Local data and generated outputs
+/data/
 logs/
 *.log
-EOF
+artifacts/
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+# Terraform
+**/.terraform/*
+*.tfstate*
+*.tfplan
+*.tfvars
+!*.tfvars.example
+crash.log
+
+# Keep metadata excluded even after example-file exceptions above.
+._*

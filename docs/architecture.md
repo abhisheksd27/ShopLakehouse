@@ -1,220 +1,86 @@
-# ShopLakehouse — Architecture
+# Architecture and design
 
-## 1. Project purpose
+## Business objective
 
-ShopLakehouse is an e-commerce analytics platform that combines
-transactional data, product API data, and marketing CSV files.
+Unify operational orders, catalog enrichment and marketing feeds into reproducible reporting. The platform must preserve money accurately, prevent partial results reaching BI, retain evidence of failures and support safe reruns. The demonstration targets daily bounded batches; it has no measured production SLA.
 
-It will produce reliable reporting tables for revenue, product
-performance, customer behavior, and marketing trends.
-
-We will use synthetic data throughout development.
-
-## 2. Implementation status
-
-This document describes the planned architecture.
-
-Completed foundation work:
-- Docker tested with the hello-world container.
-- Git repository initialized.
-- Python 3.11 virtual environment verified.
-- Initial project folders created.
-
-The data services and pipeline components below are not yet implemented.
-
-## 3. Development approach
-
-We will:
-1. Build and test a small pipeline locally.
-2. Verify its business results.
-3. Test AWS-specific integrations in a cloud development environment.
-4. Expand the pipeline and automate its operation.
-5. Document deployment, monitoring, recovery, and costs.
-
-Local and AWS environments use some different technologies.
-Both environments require their own integration tests.
-
-## 4. Local architecture
+## Logical flow
 
 ```mermaid
 flowchart TD
-    subgraph Sources["Simulated business systems"]
-        PG["Source PostgreSQL<br/>Customers, orders, payments"]
-        API["FastAPI<br/>Product information"]
-        CSV["CSV files<br/>Marketing and website traffic"]
-    end
-
-    PG --> ING["Python ingestion"]
-    API --> ING
-    CSV --> ING
-
-    ING --> BR["Bronze<br/>Raw Parquet in MinIO"]
-    BR --> SP["PySpark<br/>Clean, deduplicate, validate"]
-
-    SP --> QU["Quarantine<br/>Rejected records and reasons"]
-    SP --> SI["Silver<br/>Clean Parquet in MinIO"]
-
-    SI --> LOAD["Load validated Silver tables"]
-    LOAD --> WH["Analytics PostgreSQL<br/>Silver schema"]
-
-    WH --> DBT["dbt<br/>Build candidate Gold models"]
-    DBT --> CHECK["Gold tests and reconciliation"]
-    CHECK --> GOLD["Publish validated Gold tables<br/>Analytics PostgreSQL"]
-    GOLD --> BI["Metabase dashboards"]
-
-    AF["Airflow<br/>Scheduling, dependencies, retries"]
-    AF -.-> ING
-    AF -.-> SP
-    AF -.-> LOAD
-    AF -.-> DBT
-
-    ING -.-> AUDIT["Audit records and structured logs"]
-    SP -.-> AUDIT
-    CHECK -.-> AUDIT
+ PG[PostgreSQL: nine business tables] --> ING[Python ingestion]
+ API[Authenticated product API] --> ING
+ CSV[Daily marketing and traffic CSV] --> ING
+ ING --> BR[Immutable Bronze Parquet]
+ BR --> SP[PySpark types, checks, deduplication]
+ SP --> QU[Quarantine with reasons]
+ SP --> SI[Silver snapshots: HMAC and PII removal]
+ SI --> GX[Great Expectations]
+ GX --> LOAD[Isolated Silver warehouse schema]
+ LOAD --> DBT[dbt snapshots, facts, dimensions, aggregates]
+ DBT --> TEST[Freshness, tests, reconciliation]
+ TEST --> PUB[Publish validated version]
+ PUB --> BI[Metabase]
+ AF[Airflow daily master] -.-> ING
+ AF -.-> SP
+ AF -.-> DBT
+ ING -.-> AUD[PostgreSQL run and checkpoint ledger]
+ PUB -.-> AUD
 ```
 
-Solid arrows represent data flow.
-Dotted arrows represent orchestration and monitoring.
+## Physical deployment
 
-## 5. Data flow
+```mermaid
+flowchart LR
+ subgraph Local[Docker on developer computer]
+  SRC[Source PostgreSQL] --> WORK[Python and Spark container]
+  FAST[FastAPI] --> WORK
+  WORK <--> MIN[MinIO]
+  WORK --> ANA[Analytics PostgreSQL]
+  AIR[Airflow LocalExecutor] --> WORK
+  ANA --> META[Metabase]
+ end
+ subgraph AWS[Optional AWS deployment]
+  RDS[Private encrypted RDS] --> ECS[ECS Fargate workers]
+  ECS <--> S3[S3 KMS lake]
+  ECS --> GLUE[Glue catalog]
+  GLUE --> ATH[Athena and Iceberg Gold]
+  ECS --> CW[CloudWatch logs]
+  GH[GitHub OIDC] --> ECR[ECR immutable images]
+  ECR --> ECS
+ end
+```
 
-### Sources
+Local PostgreSQL and Athena are different engines. Shared contracts, business SQL/macros and validation logic reduce drift; they do not prove cloud behavior. Athena integration must be validated in a real account before cloud acceptance.
 
-- PostgreSQL stores simulated business transactions.
-- FastAPI supplies additional product information.
-- CSV files supply daily marketing and website traffic metrics.
+## Decisions
 
-The transactional source database is separate from the analytics database.
+| Tool/design | Reason | Alternative / tradeoff |
+|---|---|---|
+| PostgreSQL source | Real constraints, transactions and indexed watermarks | CDC captures deletes and transaction order better |
+| FastAPI | Reproducible pagination, auth and fault simulation | External API adds uncontrolled availability |
+| MinIO → S3 | Same object interface for local/cloud | Local MinIO version is a development dependency |
+| PySpark + Parquet | Typed transformations, window dedup, compact portable files | pandas is simpler for very small data |
+| dbt | SQL dependencies, tests, lineage and SCD snapshots | Custom SQL runners require more metadata tooling |
+| Athena + Glue | Query object data without an always-running warehouse | Redshift suits sustained warehouse workloads |
+| Airflow 2 LocalExecutor | Visible scheduling, mapping, retries and pools | Managed Airflow costs more; ECS task executor scales further |
+| PostgreSQL control ledger | Transactional publication/checkpoint authority | S3 manifests alone cannot commit multiple catalog views atomically |
+| Immutable versioned snapshots | Preserve retry evidence; isolate candidate failures | More storage than in-place partition replacement |
+| HMAC-SHA256 | Keyed pseudonymization resists simple dictionary matching | Hashes remain personal data, not anonymization |
+| S3 native state locking | Terraform 1.10+ supports lock files | DynamoDB locking is not used; a deliberate modernization |
 
-### Bronze: preserved source data
+## Publication contract
 
-Python extracts data and writes Parquet files to MinIO.
+Bronze path: entity / ingest date / run ID / attempt ID. Extraction success records durable object metadata but advances no checkpoint. Silver merges the previous published snapshot with the lookback extract, retains the latest key version, validates and writes another immutable object.
 
-Bronze preserves source values before business cleaning and includes
-metadata such as source name, ingestion timestamp, and batch identifier.
+Local dbt writes to `b_<run>` from `s_<run>`. Publication replaces all stable `gold` views and checkpoints in one PostgreSQL transaction. Each SQL statement sees a consistent commit; multi-query reports requiring one version should use a repeatable-read transaction or pin the candidate schema.
 
-This layer supports investigation and replay.
+AWS creates Glue Silver and Iceberg Gold under the run schema. A release manifest is written first; the PostgreSQL publication pointer and checkpoints commit next. Consumers resolve `shoplakehouse release` once and pin that schema. An orphan manifest is not a published release. There is no claim of atomic multi-table Athena view replacement.
 
-### Silver: cleaned data
+## Limits and data semantics
 
-PySpark reads committed Bronze batches and:
-- Enforces data types.
-- Standardizes timestamps and selected text fields.
-- Deduplicates records.
-- Validates required fields and business rules.
-- Pseudonymizes selected personal information.
+Incremental lookback is seven days by default. Source transactions committing later than that window need a full extraction. Hard deletes are not supported: `--full` refreshes available rows but does not infer deletions. A production CDC/tombstone design is needed for deletions.
 
-Accepted records are written to Silver.
-Rejected records are written to quarantine with a rejection reason.
+The source is not frozen across all extracts. Concurrent writes may cause reconciliation to fail conservatively; retry when writes settle. Historical source states before observation cannot be reconstructed. Customer SCD2 records observed updates and uses an unknown member for orders before observed validity.
 
-Hashing personal information is pseudonymization, not a guarantee
-of anonymization.
-
-### Local analytics loading
-
-A loading step transfers validated Silver records into the Silver
-schema of the analytics PostgreSQL database.
-
-This step connects object storage to our local SQL analytics engine.
-
-### Gold: business models
-
-dbt executes SQL against analytics PostgreSQL to create:
-- fact_orders: one row per order.
-- fact_order_items: one row per order line.
-- dim_customer: one row per observed customer version.
-- dim_product: one row per product.
-- dim_date: one row per calendar date.
-- Aggregates for revenue, customer spending, and retention.
-
-Candidate Gold models must pass tests and reconciliation before
-publication. The publication mechanism will be implemented explicitly;
-running dbt tests alone does not make publication atomic.
-
-### Dashboards
-
-Metabase queries the published Gold tables.
-
-Planned dashboards:
-- Executive overview.
-- Sales and product performance.
-- Customer behavior.
-
-### Orchestration
-
-After the individual stages work, Airflow will coordinate them.
-
-Airflow will manage scheduling, task dependencies, retries, and backfills.
-Its metadata database will be separate from business data.
-
-## 6. Core design requirements
-
-| Requirement | Planned behavior |
-|---|---|
-| Incremental ingestion | Read new and changed records using updated_at |
-| Safe checkpoints | Advance watermarks only after successful durable writes |
-| Idempotency | Re-running a batch preserves the same published business result |
-| Late data | Use an overlap window and explicit backfills |
-| Data quality | Reject invalid rows and stop publication when gates fail |
-| Reconciliation | Account for accepted, rejected, and deduplicated records |
-| Observability | Record counts, timings, batch identifiers, and failures |
-| Configuration | Keep environment-specific settings outside application logic |
-| Secrets | Keep passwords and tokens out of Git |
-| Recovery | Rebuild downstream layers from retained Bronze data |
-
-Additional conventions:
-- Store timestamps in UTC.
-- Define business reporting days using Asia/Kolkata.
-- Use INR for the initial synthetic dataset.
-- Use decimal types for money.
-- Define revenue, cancellations, and refunds before implementing metrics.
-- Customer snapshots preserve observed history; they cannot recover
-  versions that were never captured.
-- updated_at extraction alone does not capture hard deletes.
-  Delete handling must be designed explicitly before claiming support.
-
-## 7. Planned AWS architecture
-
-Target region: ap-south-1.
-
-| Local component | AWS component |
-|---|---|
-| MinIO | Amazon S3 |
-| Source PostgreSQL | Amazon RDS for PostgreSQL |
-| Analytics PostgreSQL | Athena with Glue Data Catalog |
-| Local Gold tables | Gold Iceberg tables stored in S3 |
-| Local container images | Amazon ECR |
-| Pipeline containers | ECS Fargate tasks |
-| Airflow containers | Airflow services with persistent metadata storage |
-| Local environment settings | Environment configuration and Secrets Manager |
-| Local logs | CloudWatch logs, metrics, and alarms |
-| Infrastructure setup | Terraform |
-| AWS access controls | IAM, VPC, security groups, KMS, and TLS |
-| AWS activity auditing | CloudTrail |
-
-Glue Data Catalog stores table metadata.
-Athena executes SQL against data stored in S3.
-dbt submits SQL to the selected database engine.
-
-PostgreSQL and Athena have SQL and adapter differences.
-Migration requires integration testing, not just a connection-string change.
-
-The full AWS stack is not assumed to be free.
-We will review costs before provisioning resources.
-
-## 8. First implementation milestone
-
-Build a small, verified revenue pipeline:
-
-Source PostgreSQL
-→ Bronze in MinIO
-→ Silver transformation
-→ Analytics PostgreSQL
-→ dbt daily revenue model
-→ Metabase report
-
-Success means:
-- Revenue matches an independently calculated source total.
-- Re-running the same batch does not inflate revenue.
-- Invalid test records are detected.
-- Failures are visible in logs.
+Amounts use decimal(18,2), INR. Delivered merchandise revenue is order total after line discounts; refunds and successful payment cash flow are reported separately. Dates are UTC in storage and Asia/Kolkata in reporting. The initial demonstration is intentionally small; one-part snapshots and whole-frame GX validation must be redesigned for 100× scale.

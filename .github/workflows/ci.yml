@@ -1,0 +1,108 @@
+{
+  "name": "CI",
+  "on": {
+    "push": {
+      "branches": [
+        "main"
+      ]
+    },
+    "pull_request": {},
+    "workflow_dispatch": {}
+  },
+  "permissions": {
+    "contents": "read"
+  },
+  "jobs": {
+    "quality": {
+      "runs-on": "ubuntu-latest",
+      "steps": [
+        {
+          "uses": "actions/checkout@v4"
+        },
+        {
+          "uses": "actions/setup-python@v5",
+          "with": {
+            "python-version": "3.11",
+            "cache": "pip",
+            "cache-dependency-path": "pyproject.toml"
+          }
+        },
+        {
+          "run": "python -m pip install -e '.[dev]'"
+        },
+        {
+          "run": "ruff check src tests scripts dags\nblack --check src tests scripts dags\nmypy src/shoplakehouse\nsqlfluff lint sql/analytics/queries --rules LT12"
+        },
+        {
+          "uses": "actions/setup-java@v4",
+          "with": {
+            "distribution": "temurin",
+            "java-version": "17"
+          }
+        },
+        {
+          "run": "pytest -m 'not integration' --junitxml=artifacts/unit-tests.xml"
+        },
+        {
+          "uses": "actions/upload-artifact@v4",
+          "if": "always()",
+          "with": {
+            "name": "test-results",
+            "path": "artifacts/"
+          }
+        }
+      ]
+    },
+    "terraform": {
+      "runs-on": "ubuntu-latest",
+      "steps": [
+        {
+          "uses": "actions/checkout@v4"
+        },
+        {
+          "uses": "hashicorp/setup-terraform@v3",
+          "with": {
+            "terraform_version": "1.10.5"
+          }
+        },
+        {
+          "run": "terraform fmt -check -recursive infra\nterraform -chdir=infra/environments/dev init -backend=false\nterraform -chdir=infra/environments/dev validate\nterraform -chdir=infra/environments/prod init -backend=false\nterraform -chdir=infra/environments/prod validate"
+        }
+      ]
+    },
+    "integration": {
+      "runs-on": "ubuntu-latest",
+      "steps": [
+        {
+          "uses": "actions/checkout@v4"
+        },
+        {
+          "uses": "actions/setup-python@v5",
+          "with": {
+            "python-version": "3.11",
+            "cache": "pip",
+            "cache-dependency-path": "pyproject.toml"
+          }
+        },
+        {
+          "run": "python -m pip install -e '.[dev]'\npython scripts/setup_env.py\npython scripts/build_image.py\npython scripts/build_image.py --minio\ndocker compose up -d --no-build --wait source-postgres analytics-postgres minio product-api\ndocker compose run --rm pipeline migrate\ndocker compose run --rm pipeline init-lake\ndocker compose run --rm pipeline generate --day 2026-11-09 --orders 30\ndocker compose run --rm pipeline run --day 2026-11-09\npytest -m integration"
+        },
+        {
+          "if": "always()",
+          "run": "docker compose down"
+        }
+      ]
+    },
+    "dags": {
+      "runs-on": "ubuntu-latest",
+      "steps": [
+        {
+          "uses": "actions/checkout@v4"
+        },
+        {
+          "run": "python scripts/build_image.py --airflow\ndocker run --rm --entrypoint python shoplakehouse-airflow:dev /opt/shoplakehouse/scripts/check_dags.py"
+        }
+      ]
+    }
+  }
+}

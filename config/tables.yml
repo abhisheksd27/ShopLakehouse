@@ -1,0 +1,342 @@
+{
+  "version": 1,
+  "tables": {
+    "customers": {
+      "source": "postgres",
+      "columns": {
+        "id": "long",
+        "name": "string",
+        "email": "string",
+        "city": "string",
+        "country": "string",
+        "created_at": "timestamp",
+        "updated_at": "timestamp"
+      },
+      "required": [
+        "id",
+        "name",
+        "email",
+        "city",
+        "country",
+        "created_at",
+        "updated_at"
+      ],
+      "checks": {
+        "email_format": "email RLIKE '^[^ @]+@[^ @]+[.][^ @]+$'",
+        "country_format": "country RLIKE '^[A-Z]{2}$'",
+        "name_not_blank": "length(trim(name)) > 0",
+        "timestamps": "updated_at >= created_at"
+      },
+      "pii": [
+        "name",
+        "email"
+      ]
+    },
+    "categories": {
+      "source": "postgres",
+      "columns": {
+        "id": "long",
+        "name": "string",
+        "created_at": "timestamp",
+        "updated_at": "timestamp"
+      },
+      "required": [
+        "id",
+        "name",
+        "created_at",
+        "updated_at"
+      ],
+      "checks": {
+        "name_not_blank": "length(trim(name)) > 0",
+        "timestamps": "updated_at >= created_at"
+      }
+    },
+    "products": {
+      "source": "postgres",
+      "columns": {
+        "id": "long",
+        "category_id": "long",
+        "sku": "string",
+        "name": "string",
+        "price": "decimal(18,2)",
+        "stock_quantity": "integer",
+        "created_at": "timestamp",
+        "updated_at": "timestamp"
+      },
+      "required": [
+        "id",
+        "category_id",
+        "sku",
+        "name",
+        "price",
+        "stock_quantity",
+        "created_at",
+        "updated_at"
+      ],
+      "checks": {
+        "price_nonnegative": "price >= 0",
+        "stock_nonnegative": "stock_quantity >= 0",
+        "sku_not_blank": "length(trim(sku)) > 0",
+        "timestamps": "updated_at >= created_at"
+      }
+    },
+    "addresses": {
+      "source": "postgres",
+      "columns": {
+        "id": "long",
+        "customer_id": "long",
+        "address_line1": "string",
+        "address_line2": "string",
+        "city": "string",
+        "state": "string",
+        "postal_code": "string",
+        "country": "string",
+        "created_at": "timestamp",
+        "updated_at": "timestamp"
+      },
+      "required": [
+        "id",
+        "customer_id",
+        "address_line1",
+        "city",
+        "state",
+        "postal_code",
+        "country",
+        "created_at",
+        "updated_at"
+      ],
+      "checks": {
+        "postal_format": "postal_code RLIKE '^[0-9]{6}$'",
+        "country_valid": "country = 'IN'",
+        "timestamps": "updated_at >= created_at"
+      },
+      "drop": [
+        "address_line1",
+        "address_line2",
+        "postal_code"
+      ]
+    },
+    "orders": {
+      "source": "postgres",
+      "columns": {
+        "id": "long",
+        "customer_id": "long",
+        "ordered_at": "timestamp",
+        "status": "string",
+        "currency": "string",
+        "total_amount": "decimal(18,2)",
+        "created_at": "timestamp",
+        "updated_at": "timestamp",
+        "shipping_address_id": "long"
+      },
+      "required": [
+        "id",
+        "customer_id",
+        "ordered_at",
+        "status",
+        "currency",
+        "total_amount",
+        "created_at",
+        "updated_at"
+      ],
+      "checks": {
+        "amount_nonnegative": "total_amount >= 0",
+        "status_valid": "status IN ('pending','confirmed','shipped','delivered','cancelled')",
+        "currency_valid": "currency = 'INR'",
+        "timestamps": "updated_at >= created_at"
+      }
+    },
+    "order_items": {
+      "source": "postgres",
+      "columns": {
+        "id": "long",
+        "order_id": "long",
+        "product_id": "long",
+        "line_number": "integer",
+        "quantity": "integer",
+        "unit_price": "decimal(18,2)",
+        "discount_amount": "decimal(18,2)",
+        "created_at": "timestamp",
+        "updated_at": "timestamp"
+      },
+      "required": [
+        "id",
+        "order_id",
+        "product_id",
+        "line_number",
+        "quantity",
+        "unit_price",
+        "discount_amount",
+        "created_at",
+        "updated_at"
+      ],
+      "checks": {
+        "quantity_positive": "quantity > 0",
+        "line_positive": "line_number > 0",
+        "price_nonnegative": "unit_price >= 0",
+        "discount_valid": "discount_amount >= 0 AND discount_amount <= quantity * unit_price",
+        "timestamps": "updated_at >= created_at"
+      }
+    },
+    "payments": {
+      "source": "postgres",
+      "columns": {
+        "id": "long",
+        "order_id": "long",
+        "payment_reference": "string",
+        "transaction_type": "string",
+        "payment_method": "string",
+        "status": "string",
+        "amount": "decimal(18,2)",
+        "currency": "string",
+        "processed_at": "timestamp",
+        "created_at": "timestamp",
+        "updated_at": "timestamp"
+      },
+      "required": [
+        "id",
+        "order_id",
+        "payment_reference",
+        "transaction_type",
+        "payment_method",
+        "status",
+        "amount",
+        "currency",
+        "created_at",
+        "updated_at"
+      ],
+      "checks": {
+        "amount_positive": "amount > 0",
+        "type_valid": "transaction_type IN ('payment','refund')",
+        "status_valid": "status IN ('pending','succeeded','failed')",
+        "currency_valid": "currency = 'INR'",
+        "processed_valid": "(status = 'pending' AND processed_at IS NULL) OR (status IN ('succeeded','failed') AND processed_at IS NOT NULL)",
+        "timestamps": "updated_at >= created_at"
+      }
+    },
+    "shipments": {
+      "source": "postgres",
+      "columns": {
+        "id": "long",
+        "order_id": "long",
+        "tracking_number": "string",
+        "carrier": "string",
+        "status": "string",
+        "shipped_at": "timestamp",
+        "delivered_at": "timestamp",
+        "created_at": "timestamp",
+        "updated_at": "timestamp"
+      },
+      "required": [
+        "id",
+        "order_id",
+        "tracking_number",
+        "carrier",
+        "status",
+        "created_at",
+        "updated_at"
+      ],
+      "checks": {
+        "status_valid": "status IN ('pending','shipped','delivered','returned')",
+        "shipped_valid": "status = 'pending' OR shipped_at IS NOT NULL",
+        "delivered_valid": "status <> 'delivered' OR delivered_at IS NOT NULL",
+        "date_order": "delivered_at IS NULL OR (shipped_at IS NOT NULL AND delivered_at >= shipped_at)",
+        "timestamps": "updated_at >= created_at"
+      }
+    },
+    "reviews": {
+      "source": "postgres",
+      "columns": {
+        "id": "long",
+        "customer_id": "long",
+        "product_id": "long",
+        "rating": "integer",
+        "review_text": "string",
+        "created_at": "timestamp",
+        "updated_at": "timestamp"
+      },
+      "required": [
+        "id",
+        "customer_id",
+        "product_id",
+        "rating",
+        "created_at",
+        "updated_at"
+      ],
+      "checks": {
+        "rating_valid": "rating BETWEEN 1 AND 5",
+        "timestamps": "updated_at >= created_at"
+      },
+      "drop": [
+        "review_text"
+      ]
+    },
+    "product_api": {
+      "source": "api",
+      "columns": {
+        "id": "long",
+        "sku": "string",
+        "brand": "string",
+        "material": "string",
+        "updated_at": "timestamp"
+      },
+      "required": [
+        "id",
+        "sku",
+        "brand",
+        "material",
+        "updated_at"
+      ],
+      "checks": {
+        "sku_not_blank": "length(trim(sku)) > 0"
+      }
+    },
+    "marketing": {
+      "source": "csv",
+      "columns": {
+        "id": "string",
+        "event_date": "date",
+        "channel": "string",
+        "spend": "decimal(18,2)",
+        "impressions": "long",
+        "clicks": "long",
+        "updated_at": "timestamp"
+      },
+      "required": [
+        "id",
+        "event_date",
+        "channel",
+        "spend",
+        "impressions",
+        "clicks",
+        "updated_at"
+      ],
+      "checks": {
+        "spend_nonnegative": "spend >= 0",
+        "counts_valid": "impressions >= clicks AND clicks >= 0"
+      }
+    },
+    "web_traffic": {
+      "source": "csv",
+      "columns": {
+        "id": "string",
+        "event_date": "date",
+        "channel": "string",
+        "sessions": "long",
+        "conversions": "long",
+        "updated_at": "timestamp"
+      },
+      "required": [
+        "id",
+        "event_date",
+        "channel",
+        "sessions",
+        "conversions",
+        "updated_at"
+      ],
+      "checks": {
+        "counts_valid": "sessions >= conversions AND conversions >= 0"
+      }
+    }
+  }
+}

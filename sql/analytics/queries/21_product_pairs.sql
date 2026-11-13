@@ -1,0 +1,2 @@
+-- Co-purchased product pairs in delivered orders.
+SELECT a.product_id AS product_a,b.product_id AS product_b,count(DISTINCT a.order_id) AS orders_together FROM gold.fact_order_items a JOIN gold.fact_order_items b ON a.order_id=b.order_id AND a.product_id<b.product_id JOIN gold.fact_orders o ON a.order_id=o.order_id WHERE o.status='delivered' GROUP BY a.product_id,b.product_id ORDER BY orders_together DESC LIMIT 20;

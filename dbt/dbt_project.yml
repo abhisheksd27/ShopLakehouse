@@ -1,0 +1,21 @@
+name: shoplakehouse
+version: '1.0.0'
+config-version: 2
+profile: shoplakehouse
+model-paths: [models]
+snapshot-paths: [snapshots]
+test-paths: [tests]
+seed-paths: [seeds]
+macro-paths: [macros]
+clean-targets: [target, dbt_packages]
+models:
+  shoplakehouse:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table
+      +table_type: iceberg
+      +format: parquet
+snapshots:
+  shoplakehouse:
+    +target_schema: "{{ env_var('DBT_SCHEMA', 'development') }}"

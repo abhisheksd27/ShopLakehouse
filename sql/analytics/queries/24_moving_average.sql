@@ -1,0 +1,2 @@
+-- Calendar-day average including zero-revenue dates.
+WITH bounds AS (SELECT min(business_date) AS lo,max(business_date) AS hi FROM gold.daily_revenue), days AS (SELECT d.date_day,coalesce(r.delivered_merchandise_revenue,0) AS revenue FROM gold.dim_date d CROSS JOIN bounds b LEFT JOIN gold.daily_revenue r ON r.business_date=d.date_day WHERE d.date_day BETWEEN b.lo AND b.hi) SELECT date_day,revenue,round(avg(revenue) OVER (ORDER BY date_day ROWS BETWEEN 6 PRECEDING AND CURRENT ROW),2) AS seven_day_average FROM days ORDER BY date_day;

@@ -1,0 +1,162 @@
+{
+  "version": 2,
+  "models": [
+    {
+      "name": "fact_orders",
+      "columns": [
+        {
+          "name": "order_id",
+          "tests": [
+            "unique",
+            "not_null"
+          ]
+        },
+        {
+          "name": "customer_key",
+          "tests": [
+            {
+              "relationships": {
+                "to": "ref('dim_customer')",
+                "field": "customer_key"
+              }
+            }
+          ]
+        },
+        {
+          "name": "total_amount",
+          "tests": [
+            "not_null",
+            "nonnegative"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "fact_order_items",
+      "columns": [
+        {
+          "name": "order_item_id",
+          "tests": [
+            "unique",
+            "not_null"
+          ]
+        },
+        {
+          "name": "order_id",
+          "tests": [
+            {
+              "relationships": {
+                "to": "ref('fact_orders')",
+                "field": "order_id"
+              }
+            }
+          ]
+        },
+        {
+          "name": "product_id",
+          "tests": [
+            {
+              "relationships": {
+                "to": "ref('dim_product')",
+                "field": "product_id"
+              }
+            }
+          ]
+        },
+        {
+          "name": "line_amount",
+          "tests": [
+            "nonnegative"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "fact_payments",
+      "columns": [
+        {
+          "name": "payment_id",
+          "tests": [
+            "unique",
+            "not_null"
+          ]
+        },
+        {
+          "name": "order_id",
+          "tests": [
+            {
+              "relationships": {
+                "to": "ref('fact_orders')",
+                "field": "order_id"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "dim_customer",
+      "columns": [
+        {
+          "name": "customer_key",
+          "tests": [
+            "unique",
+            "not_null"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "dim_product",
+      "columns": [
+        {
+          "name": "product_id",
+          "tests": [
+            "unique",
+            "not_null"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "dim_date",
+      "columns": [
+        {
+          "name": "date_day",
+          "tests": [
+            "unique",
+            "not_null"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "daily_revenue",
+      "columns": [
+        {
+          "name": "business_date",
+          "tests": [
+            "unique",
+            "not_null"
+          ]
+        },
+        {
+          "name": "delivered_merchandise_revenue",
+          "tests": [
+            "nonnegative"
+          ]
+        }
+      ]
+    }
+  ],
+  "seeds": [
+    {
+      "name": "calendar",
+      "config": {
+        "column_types": {
+          "calendar_date": "date"
+        }
+      }
+    }
+  ]
+}

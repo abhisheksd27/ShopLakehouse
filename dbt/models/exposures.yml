@@ -1,0 +1,13 @@
+version: 2
+exposures:
+  - name: executive_overview
+    type: dashboard
+    maturity: low
+    description: Delivered merchandise revenue and separately measured cash collection.
+    owner:
+      name: ShopLakehouse maintainer
+      email: maintainer@example.test
+    depends_on:
+      - ref('daily_revenue')
+      - ref('customer_ltv')
+      - ref('marketing_performance')

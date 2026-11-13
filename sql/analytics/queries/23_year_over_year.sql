@@ -1,0 +1,2 @@
+-- Monthly same-month prior-year comparison; null where history is absent.
+WITH m AS (SELECT date_trunc('month',business_date)::date AS month,sum(delivered_merchandise_revenue) AS revenue FROM gold.daily_revenue GROUP BY 1) SELECT c.month,c.revenue,p.revenue AS prior_year_revenue,round(100.0*(c.revenue-p.revenue)/nullif(p.revenue,0),2) AS yoy_percent FROM m c LEFT JOIN m p ON p.month=c.month-interval '1 year' ORDER BY c.month;

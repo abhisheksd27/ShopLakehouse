@@ -1,32 +1,499 @@
-name: shoplakehouse
-
-services:
-  source-postgres:
-    image: postgres:16.15-bookworm
-    restart: unless-stopped
-
-    environment:
-      POSTGRES_DB: ${SOURCE_DB_NAME:?Set SOURCE_DB_NAME in .env}
-      POSTGRES_USER: ${SOURCE_DB_USER:?Set SOURCE_DB_USER in .env}
-      POSTGRES_PASSWORD: ${SOURCE_DB_PASSWORD:?Set SOURCE_DB_PASSWORD in .env}
-      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
-
-    command: ["postgres", "-c", "timezone=UTC"]
-
-    ports:
-      - "127.0.0.1:${SOURCE_DB_PORT:-5433}:5432"
-
-    volumes:
-      - source_postgres_data:/var/lib/postgresql/data
-
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - 'pg_isready -h 127.0.0.1 -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"'
-      interval: 5s
-      timeout: 5s
-      retries: 10
-      start_period: 20s
-
-volumes:
-  source_postgres_data:
+{
+  "name": "shoplakehouse",
+  "services": {
+    "source-postgres": {
+      "image": "postgres:16.15-bookworm",
+      "restart": "unless-stopped",
+      "environment": {
+        "POSTGRES_DB": "${SOURCE_DB_NAME}",
+        "POSTGRES_USER": "${SOURCE_DB_USER}",
+        "POSTGRES_PASSWORD": "${SOURCE_DB_PASSWORD}",
+        "POSTGRES_INITDB_ARGS": "--auth-host=scram-sha-256"
+      },
+      "command": [
+        "postgres",
+        "-c",
+        "timezone=UTC"
+      ],
+      "ports": [
+        "127.0.0.1:${SOURCE_DB_PORT:-5433}:5432"
+      ],
+      "volumes": [
+        "source_postgres_data:/var/lib/postgresql/data"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""
+        ],
+        "interval": "5s",
+        "timeout": "5s",
+        "retries": 20,
+        "start_period": "20s"
+      }
+    },
+    "analytics-postgres": {
+      "image": "postgres:16.15-bookworm",
+      "restart": "unless-stopped",
+      "environment": {
+        "POSTGRES_DB": "${ANALYTICS_DB_NAME}",
+        "POSTGRES_USER": "${ANALYTICS_DB_USER}",
+        "POSTGRES_PASSWORD": "${ANALYTICS_DB_PASSWORD}",
+        "POSTGRES_INITDB_ARGS": "--auth-host=scram-sha-256"
+      },
+      "command": [
+        "postgres",
+        "-c",
+        "timezone=UTC"
+      ],
+      "ports": [
+        "127.0.0.1:${ANALYTICS_DB_PORT:-5434}:5432"
+      ],
+      "volumes": [
+        "analytics_postgres_data:/var/lib/postgresql/data"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""
+        ],
+        "interval": "5s",
+        "timeout": "5s",
+        "retries": 20,
+        "start_period": "20s"
+      }
+    },
+    "minio": {
+      "image": "shoplakehouse-minio:dev",
+      "command": [
+        "server",
+        "/data",
+        "--console-address",
+        ":9001"
+      ],
+      "environment": {
+        "MINIO_ROOT_USER": "${MINIO_ROOT_USER}",
+        "MINIO_ROOT_PASSWORD": "${MINIO_ROOT_PASSWORD}"
+      },
+      "ports": [
+        "127.0.0.1:9000:9000",
+        "127.0.0.1:9001:9001"
+      ],
+      "volumes": [
+        "minio_data:/data"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "curl",
+          "-f",
+          "http://localhost:9000/minio/health/live"
+        ],
+        "interval": "5s",
+        "timeout": "5s",
+        "retries": 20
+      }
+    },
+    "product-api": {
+      "build": ".",
+      "image": "shoplakehouse:dev",
+      "entrypoint": [
+        "uvicorn",
+        "shoplakehouse.api:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000"
+      ],
+      "environment": {
+        "SOURCE_DB_HOST": "source-postgres",
+        "SOURCE_DB_PORT": "5432",
+        "SOURCE_DB_NAME": "${SOURCE_DB_NAME}",
+        "SOURCE_DB_USER": "${SOURCE_DB_USER}",
+        "SOURCE_DB_PASSWORD": "${SOURCE_DB_PASSWORD}",
+        "API_TOKEN": "${API_TOKEN}",
+        "API_FAILURE_RATE": "${API_FAILURE_RATE:-0}",
+        "API_RATE_LIMIT": "${API_RATE_LIMIT:-120}"
+      },
+      "ports": [
+        "127.0.0.1:8000:8000"
+      ],
+      "depends_on": {
+        "source-postgres": {
+          "condition": "service_healthy"
+        }
+      },
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "curl",
+          "-f",
+          "http://localhost:8000/health"
+        ],
+        "interval": "5s",
+        "timeout": "5s",
+        "retries": 30,
+        "start_period": "20s"
+      }
+    },
+    "pipeline": {
+      "build": ".",
+      "image": "shoplakehouse:dev",
+      "profiles": [
+        "tools"
+      ],
+      "environment": {
+        "SOURCE_DB_HOST": "source-postgres",
+        "SOURCE_DB_PORT": "5432",
+        "SOURCE_DB_NAME": "${SOURCE_DB_NAME}",
+        "SOURCE_DB_USER": "${SOURCE_DB_USER}",
+        "SOURCE_DB_PASSWORD": "${SOURCE_DB_PASSWORD}",
+        "ANALYTICS_DB_HOST": "analytics-postgres",
+        "ANALYTICS_DB_PORT": "5432",
+        "ANALYTICS_DB_NAME": "${ANALYTICS_DB_NAME}",
+        "ANALYTICS_DB_USER": "${ANALYTICS_DB_USER}",
+        "ANALYTICS_DB_PASSWORD": "${ANALYTICS_DB_PASSWORD}",
+        "MINIO_ROOT_USER": "${MINIO_ROOT_USER}",
+        "MINIO_ROOT_PASSWORD": "${MINIO_ROOT_PASSWORD}",
+        "S3_ENDPOINT_URL": "http://minio:9000",
+        "AWS_DEFAULT_REGION": "${AWS_DEFAULT_REGION:-ap-south-1}",
+        "LAKE_BUCKET": "${LAKE_BUCKET:-shoplakehouse-local}",
+        "PII_HASH_KEY": "${PII_HASH_KEY}",
+        "API_TOKEN": "${API_TOKEN}",
+        "PRODUCT_API_URL": "http://product-api:8000",
+        "DATA_DIR": "/app/data",
+        "SPARK_MASTER": "local[2]",
+        "GX_ANALYTICS_ENABLED": "false",
+        "MAX_REJECTED_ROWS": "${MAX_REJECTED_ROWS:-0}",
+        "LOOKBACK_HOURS": "${LOOKBACK_HOURS:-168}",
+        "WAREHOUSE_ENGINE": "postgres"
+      },
+      "volumes": [
+        "./data:/app/data",
+        "./artifacts:/app/artifacts"
+      ],
+      "depends_on": {
+        "source-postgres": {
+          "condition": "service_healthy"
+        },
+        "analytics-postgres": {
+          "condition": "service_healthy"
+        },
+        "minio": {
+          "condition": "service_healthy"
+        },
+        "product-api": {
+          "condition": "service_healthy"
+        }
+      }
+    },
+    "airflow-postgres": {
+      "image": "postgres:16.15-bookworm",
+      "restart": "unless-stopped",
+      "environment": {
+        "POSTGRES_DB": "airflow",
+        "POSTGRES_USER": "airflow",
+        "POSTGRES_PASSWORD": "${AIRFLOW_DB_PASSWORD}",
+        "POSTGRES_INITDB_ARGS": "--auth-host=scram-sha-256"
+      },
+      "command": [
+        "postgres",
+        "-c",
+        "timezone=UTC"
+      ],
+      "volumes": [
+        "airflow_postgres_data:/var/lib/postgresql/data"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""
+        ],
+        "interval": "5s",
+        "timeout": "5s",
+        "retries": 20,
+        "start_period": "20s"
+      },
+      "profiles": [
+        "orchestration"
+      ]
+    },
+    "airflow-init": {
+      "build": {
+        "context": ".",
+        "dockerfile": "docker/airflow.Dockerfile"
+      },
+      "image": "shoplakehouse-airflow:dev",
+      "profiles": [
+        "orchestration"
+      ],
+      "environment": {
+        "SOURCE_DB_HOST": "source-postgres",
+        "SOURCE_DB_PORT": "5432",
+        "SOURCE_DB_NAME": "${SOURCE_DB_NAME}",
+        "SOURCE_DB_USER": "${SOURCE_DB_USER}",
+        "SOURCE_DB_PASSWORD": "${SOURCE_DB_PASSWORD}",
+        "ANALYTICS_DB_HOST": "analytics-postgres",
+        "ANALYTICS_DB_PORT": "5432",
+        "ANALYTICS_DB_NAME": "${ANALYTICS_DB_NAME}",
+        "ANALYTICS_DB_USER": "${ANALYTICS_DB_USER}",
+        "ANALYTICS_DB_PASSWORD": "${ANALYTICS_DB_PASSWORD}",
+        "MINIO_ROOT_USER": "${MINIO_ROOT_USER}",
+        "MINIO_ROOT_PASSWORD": "${MINIO_ROOT_PASSWORD}",
+        "S3_ENDPOINT_URL": "http://minio:9000",
+        "AWS_DEFAULT_REGION": "${AWS_DEFAULT_REGION:-ap-south-1}",
+        "LAKE_BUCKET": "${LAKE_BUCKET:-shoplakehouse-local}",
+        "PII_HASH_KEY": "${PII_HASH_KEY}",
+        "API_TOKEN": "${API_TOKEN}",
+        "PRODUCT_API_URL": "http://product-api:8000",
+        "DATA_DIR": "/opt/shoplakehouse/data",
+        "SPARK_MASTER": "local[2]",
+        "GX_ANALYTICS_ENABLED": "false",
+        "MAX_REJECTED_ROWS": "${MAX_REJECTED_ROWS:-0}",
+        "LOOKBACK_HOURS": "${LOOKBACK_HOURS:-168}",
+        "WAREHOUSE_ENGINE": "postgres",
+        "AIRFLOW__CORE__EXECUTOR": "LocalExecutor",
+        "AIRFLOW__CORE__LOAD_EXAMPLES": "false",
+        "AIRFLOW__DATABASE__SQL_ALCHEMY_CONN": "postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@airflow-postgres:5432/airflow",
+        "AIRFLOW__CORE__FERNET_KEY": "${AIRFLOW_FERNET_KEY}",
+        "AIRFLOW__WEBSERVER__SECRET_KEY": "${AIRFLOW_WEBSERVER_SECRET_KEY}",
+        "AIRFLOW__CORE__PARALLELISM": "2",
+        "AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG": "2",
+        "AIRFLOW_ADMIN_PASSWORD": "${AIRFLOW_ADMIN_PASSWORD}",
+        "AIRFLOW__WEBSERVER__EXPOSE_CONFIG": "false"
+      },
+      "volumes": [
+        "./data:/opt/shoplakehouse/data",
+        "./artifacts:/opt/shoplakehouse/artifacts",
+        "airflow_logs:/opt/airflow/logs",
+        "./scripts:/opt/shoplakehouse/scripts:ro"
+      ],
+      "entrypoint": [
+        "bash",
+        "/opt/shoplakehouse/scripts/airflow_init.sh"
+      ],
+      "depends_on": {
+        "airflow-postgres": {
+          "condition": "service_healthy"
+        }
+      }
+    },
+    "airflow-scheduler": {
+      "build": {
+        "context": ".",
+        "dockerfile": "docker/airflow.Dockerfile"
+      },
+      "image": "shoplakehouse-airflow:dev",
+      "profiles": [
+        "orchestration"
+      ],
+      "environment": {
+        "SOURCE_DB_HOST": "source-postgres",
+        "SOURCE_DB_PORT": "5432",
+        "SOURCE_DB_NAME": "${SOURCE_DB_NAME}",
+        "SOURCE_DB_USER": "${SOURCE_DB_USER}",
+        "SOURCE_DB_PASSWORD": "${SOURCE_DB_PASSWORD}",
+        "ANALYTICS_DB_HOST": "analytics-postgres",
+        "ANALYTICS_DB_PORT": "5432",
+        "ANALYTICS_DB_NAME": "${ANALYTICS_DB_NAME}",
+        "ANALYTICS_DB_USER": "${ANALYTICS_DB_USER}",
+        "ANALYTICS_DB_PASSWORD": "${ANALYTICS_DB_PASSWORD}",
+        "MINIO_ROOT_USER": "${MINIO_ROOT_USER}",
+        "MINIO_ROOT_PASSWORD": "${MINIO_ROOT_PASSWORD}",
+        "S3_ENDPOINT_URL": "http://minio:9000",
+        "AWS_DEFAULT_REGION": "${AWS_DEFAULT_REGION:-ap-south-1}",
+        "LAKE_BUCKET": "${LAKE_BUCKET:-shoplakehouse-local}",
+        "PII_HASH_KEY": "${PII_HASH_KEY}",
+        "API_TOKEN": "${API_TOKEN}",
+        "PRODUCT_API_URL": "http://product-api:8000",
+        "DATA_DIR": "/opt/shoplakehouse/data",
+        "SPARK_MASTER": "local[2]",
+        "GX_ANALYTICS_ENABLED": "false",
+        "MAX_REJECTED_ROWS": "${MAX_REJECTED_ROWS:-0}",
+        "LOOKBACK_HOURS": "${LOOKBACK_HOURS:-168}",
+        "WAREHOUSE_ENGINE": "postgres",
+        "AIRFLOW__CORE__EXECUTOR": "LocalExecutor",
+        "AIRFLOW__CORE__LOAD_EXAMPLES": "false",
+        "AIRFLOW__DATABASE__SQL_ALCHEMY_CONN": "postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@airflow-postgres:5432/airflow",
+        "AIRFLOW__CORE__FERNET_KEY": "${AIRFLOW_FERNET_KEY}",
+        "AIRFLOW__WEBSERVER__SECRET_KEY": "${AIRFLOW_WEBSERVER_SECRET_KEY}",
+        "AIRFLOW__CORE__PARALLELISM": "2",
+        "AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG": "2",
+        "AIRFLOW_ADMIN_PASSWORD": "${AIRFLOW_ADMIN_PASSWORD}",
+        "AIRFLOW__WEBSERVER__EXPOSE_CONFIG": "false"
+      },
+      "volumes": [
+        "./data:/opt/shoplakehouse/data",
+        "./artifacts:/opt/shoplakehouse/artifacts",
+        "airflow_logs:/opt/airflow/logs"
+      ],
+      "command": [
+        "scheduler"
+      ],
+      "restart": "unless-stopped",
+      "depends_on": {
+        "source-postgres": {
+          "condition": "service_healthy"
+        },
+        "analytics-postgres": {
+          "condition": "service_healthy"
+        },
+        "minio": {
+          "condition": "service_healthy"
+        },
+        "product-api": {
+          "condition": "service_healthy"
+        },
+        "airflow-init": {
+          "condition": "service_completed_successfully"
+        }
+      }
+    },
+    "airflow-webserver": {
+      "build": {
+        "context": ".",
+        "dockerfile": "docker/airflow.Dockerfile"
+      },
+      "image": "shoplakehouse-airflow:dev",
+      "profiles": [
+        "orchestration"
+      ],
+      "environment": {
+        "SOURCE_DB_HOST": "source-postgres",
+        "SOURCE_DB_PORT": "5432",
+        "SOURCE_DB_NAME": "${SOURCE_DB_NAME}",
+        "SOURCE_DB_USER": "${SOURCE_DB_USER}",
+        "SOURCE_DB_PASSWORD": "${SOURCE_DB_PASSWORD}",
+        "ANALYTICS_DB_HOST": "analytics-postgres",
+        "ANALYTICS_DB_PORT": "5432",
+        "ANALYTICS_DB_NAME": "${ANALYTICS_DB_NAME}",
+        "ANALYTICS_DB_USER": "${ANALYTICS_DB_USER}",
+        "ANALYTICS_DB_PASSWORD": "${ANALYTICS_DB_PASSWORD}",
+        "MINIO_ROOT_USER": "${MINIO_ROOT_USER}",
+        "MINIO_ROOT_PASSWORD": "${MINIO_ROOT_PASSWORD}",
+        "S3_ENDPOINT_URL": "http://minio:9000",
+        "AWS_DEFAULT_REGION": "${AWS_DEFAULT_REGION:-ap-south-1}",
+        "LAKE_BUCKET": "${LAKE_BUCKET:-shoplakehouse-local}",
+        "PII_HASH_KEY": "${PII_HASH_KEY}",
+        "API_TOKEN": "${API_TOKEN}",
+        "PRODUCT_API_URL": "http://product-api:8000",
+        "DATA_DIR": "/opt/shoplakehouse/data",
+        "SPARK_MASTER": "local[2]",
+        "GX_ANALYTICS_ENABLED": "false",
+        "MAX_REJECTED_ROWS": "${MAX_REJECTED_ROWS:-0}",
+        "LOOKBACK_HOURS": "${LOOKBACK_HOURS:-168}",
+        "WAREHOUSE_ENGINE": "postgres",
+        "AIRFLOW__CORE__EXECUTOR": "LocalExecutor",
+        "AIRFLOW__CORE__LOAD_EXAMPLES": "false",
+        "AIRFLOW__DATABASE__SQL_ALCHEMY_CONN": "postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@airflow-postgres:5432/airflow",
+        "AIRFLOW__CORE__FERNET_KEY": "${AIRFLOW_FERNET_KEY}",
+        "AIRFLOW__WEBSERVER__SECRET_KEY": "${AIRFLOW_WEBSERVER_SECRET_KEY}",
+        "AIRFLOW__CORE__PARALLELISM": "2",
+        "AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG": "2",
+        "AIRFLOW_ADMIN_PASSWORD": "${AIRFLOW_ADMIN_PASSWORD}",
+        "AIRFLOW__WEBSERVER__EXPOSE_CONFIG": "false"
+      },
+      "volumes": [
+        "./data:/opt/shoplakehouse/data",
+        "./artifacts:/opt/shoplakehouse/artifacts",
+        "airflow_logs:/opt/airflow/logs"
+      ],
+      "command": [
+        "webserver"
+      ],
+      "restart": "unless-stopped",
+      "ports": [
+        "127.0.0.1:8080:8080"
+      ],
+      "depends_on": {
+        "airflow-init": {
+          "condition": "service_completed_successfully"
+        }
+      },
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "curl",
+          "-f",
+          "http://localhost:8080/health"
+        ],
+        "interval": "20s",
+        "timeout": "10s",
+        "retries": 10
+      }
+    },
+    "metabase-postgres": {
+      "image": "postgres:16.15-bookworm",
+      "restart": "unless-stopped",
+      "environment": {
+        "POSTGRES_DB": "metabase",
+        "POSTGRES_USER": "metabase",
+        "POSTGRES_PASSWORD": "${METABASE_DB_PASSWORD}",
+        "POSTGRES_INITDB_ARGS": "--auth-host=scram-sha-256"
+      },
+      "command": [
+        "postgres",
+        "-c",
+        "timezone=UTC"
+      ],
+      "volumes": [
+        "metabase_postgres_data:/var/lib/postgresql/data"
+      ],
+      "healthcheck": {
+        "test": [
+          "CMD-SHELL",
+          "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""
+        ],
+        "interval": "5s",
+        "timeout": "5s",
+        "retries": 20,
+        "start_period": "20s"
+      },
+      "profiles": [
+        "bi"
+      ]
+    },
+    "metabase": {
+      "image": "metabase/metabase:v0.56.9",
+      "profiles": [
+        "bi"
+      ],
+      "ports": [
+        "127.0.0.1:3000:3000"
+      ],
+      "environment": {
+        "MB_DB_TYPE": "postgres",
+        "MB_DB_HOST": "metabase-postgres",
+        "MB_DB_PORT": "5432",
+        "MB_DB_DBNAME": "metabase",
+        "MB_DB_USER": "metabase",
+        "MB_DB_PASS": "${METABASE_DB_PASSWORD}"
+      },
+      "depends_on": {
+        "metabase-postgres": {
+          "condition": "service_healthy"
+        }
+      },
+      "healthcheck": {
+        "test": [
+          "CMD",
+          "curl",
+          "-f",
+          "http://localhost:3000/api/health"
+        ],
+        "interval": "15s",
+        "timeout": "10s",
+        "retries": 30,
+        "start_period": "60s"
+      }
+    }
+  },
+  "volumes": {
+    "source_postgres_data": {},
+    "analytics_postgres_data": {},
+    "minio_data": {},
+    "airflow_postgres_data": {},
+    "airflow_logs": {},
+    "metabase_postgres_data": {}
+  }
+}

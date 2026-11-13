@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "shoplakehouse"
+version = "0.1.0"
+description = "Local-first e-commerce lakehouse with verified publication"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+  "boto3==1.40.61", "psycopg[binary]==3.2.12", "pyarrow==19.0.1",
+  "pandas==2.2.3", "numpy==1.26.4", "PyYAML==6.0.2",
+  "httpx==0.28.1", "tenacity==9.1.2", "Faker==37.11.0",
+  "fastapi==0.119.1", "uvicorn==0.38.0", "python-dotenv==1.1.1",
+  "pyspark==3.5.7", "great-expectations==1.8.0",
+  "dbt-core==1.9.8", "dbt-postgres==1.9.1", "typer==0.16.1"
+]
+
+[project.optional-dependencies]
+dev = ["pytest==8.3.5", "pytest-cov==6.1.1", "moto[s3]==5.1.15", "ruff==0.11.13", "black==25.1.0", "mypy==1.15.0", "types-PyYAML==6.0.12.20250402", "pre-commit==4.2.0", "sqlfluff==3.4.0"]
+cloud = ["dbt-athena==1.9.5"]
+
+[project.scripts]
+shoplakehouse = "shoplakehouse.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: requires local services", "spark: requires Java 17 and Spark"]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["._*"]
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "B"]
+
+[tool.black]
+extend-exclude = '/\._'
+line-length = 100
+target-version = ["py311"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+check_untyped_defs = true
+
+[tool.sqlfluff.core]
+dialect = "postgres"
+templater = "jinja"
+exclude_rules = "LT05,RF04"

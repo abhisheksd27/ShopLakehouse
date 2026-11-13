@@ -1,0 +1,14 @@
+.git
+.venv
+.env
+.env.*
+!.env.example
+data
+logs
+artifacts
+**/._*
+**/__pycache__
+**/.terraform
+**/*.tfstate*
+dbt/target
+dbt/logs

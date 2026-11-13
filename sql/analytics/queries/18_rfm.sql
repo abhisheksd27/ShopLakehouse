@@ -1,0 +1,2 @@
+-- Recency relative to latest observed order date, frequency and monetary quartiles.
+WITH scored AS (SELECT customer_id,(SELECT max(order_date) FROM gold.fact_orders)-last_order_date AS recency_days,delivered_orders AS frequency,historical_spend AS monetary FROM gold.customer_ltv) SELECT *,ntile(4) OVER (ORDER BY recency_days DESC) AS recency_score,ntile(4) OVER (ORDER BY frequency) AS frequency_score,ntile(4) OVER (ORDER BY monetary) AS monetary_score FROM scored ORDER BY monetary DESC;

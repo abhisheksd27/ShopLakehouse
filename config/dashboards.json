@@ -1,0 +1,146 @@
+[
+  {
+    "name": "ShopLakehouse \u00b7 Daily merchandise revenue",
+    "description": "Delivered orders valued at their historical sale prices.",
+    "display": "line",
+    "file": "sql/analytics/queries/01_daily_revenue.sql"
+  },
+  {
+    "name": "ShopLakehouse \u00b7 Sales KPIs",
+    "description": "Delivered merchandise revenue, orders, and weighted average order value.",
+    "display": "table",
+    "file": "sql/analytics/queries/02_sales_kpis.sql"
+  },
+  {
+    "name": "ShopLakehouse \u00b7 Top products",
+    "description": "Top ten products by delivered merchandise revenue.",
+    "display": "bar",
+    "file": "sql/analytics/queries/03_top_products.sql"
+  },
+  {
+    "name": "ShopLakehouse \u00b7 Category sales",
+    "description": "Delivered order items grouped by product category.",
+    "display": "bar",
+    "file": "sql/analytics/queries/04_category_sales.sql"
+  },
+  {
+    "name": "ShopLakehouse \u00b7 Cash and refunds",
+    "description": "Net successful cash movement and refunds by processing date; distinct from merchandise revenue.",
+    "display": "line",
+    "file": "sql/analytics/queries/05_cash_and_refunds.sql"
+  },
+  {
+    "name": "ShopLakehouse \u00b7 Customer historical value",
+    "description": "Observed delivered spend; this is not a predictive lifetime value.",
+    "display": "table",
+    "file": "sql/analytics/queries/06_customer_value.sql"
+  },
+  {
+    "name": "ShopLakehouse \u00b7 Cohort retention",
+    "description": "Monthly active buyers divided by original cohort buyers.",
+    "display": "table",
+    "file": "sql/analytics/queries/07_cohort_retention.sql"
+  },
+  {
+    "name": "ShopLakehouse \u00b7 Marketing performance",
+    "description": "Traffic and ad metrics by channel; no unmeasured attribution or ROI is claimed.",
+    "display": "table",
+    "file": "sql/analytics/queries/08_marketing.sql"
+  },
+  {
+    "name": "ShopLakehouse \u00b7 Repeat customers",
+    "description": "Share of observed buyers with at least two delivered orders.",
+    "display": "table",
+    "file": "sql/analytics/queries/09_repeat_customers.sql"
+  },
+  {
+    "name": "ShopLakehouse \u00b7 Cancellation trend",
+    "description": "Cancelled orders divided by all orders by placement date.",
+    "display": "line",
+    "file": "sql/analytics/queries/10_cancellations.sql"
+  },
+  {
+    "name": "ShopLakehouse \u00b7 Payment methods",
+    "description": "Successful charges and refunds by payment method.",
+    "display": "bar",
+    "file": "sql/analytics/queries/11_payment_methods.sql"
+  },
+  {
+    "name": "ShopLakehouse \u00b7 Customer cities",
+    "description": "Delivered revenue by observed historical city; unknown captures pre-observation orders.",
+    "display": "bar",
+    "file": "sql/analytics/queries/12_customer_cities.sql"
+  },
+  {
+    "name": "ShopLakehouse \u00b7 Monthly revenue growth",
+    "description": "Month over month delivered revenue growth, using a window function.",
+    "display": "table",
+    "file": "sql/analytics/queries/13_monthly_growth.sql"
+  },
+  {
+    "name": "ShopLakehouse \u00b7 Basket size",
+    "description": "Average units and distinct products in delivered orders.",
+    "display": "table",
+    "file": "sql/analytics/queries/14_basket_size.sql"
+  },
+  {
+    "name": "ShopLakehouse \u00b7 Discounts by category",
+    "description": "Discounts are per line, not per unit.",
+    "display": "table",
+    "file": "sql/analytics/queries/15_discounts.sql"
+  },
+  {
+    "name": "ShopLakehouse \u00b7 Running revenue",
+    "description": "Cumulative delivered revenue over calendar dates.",
+    "display": "table",
+    "file": "sql/analytics/queries/16_running_revenue.sql"
+  },
+  {
+    "name": "ShopLakehouse \u00b7 Top products per category",
+    "description": "Top three products in each category by delivered revenue.",
+    "display": "table",
+    "file": "sql/analytics/queries/17_category_ranks.sql"
+  },
+  {
+    "name": "ShopLakehouse \u00b7 RFM segmentation",
+    "description": "Recency relative to latest observed order date, frequency and monetary quartiles.",
+    "display": "table",
+    "file": "sql/analytics/queries/18_rfm.sql"
+  },
+  {
+    "name": "ShopLakehouse \u00b7 AOV trend",
+    "description": "Daily delivered merchandise revenue per delivered order.",
+    "display": "table",
+    "file": "sql/analytics/queries/19_aov_trend.sql"
+  },
+  {
+    "name": "ShopLakehouse \u00b7 Traffic funnel",
+    "description": "Channel funnel totals; simulated aggregate feeds are not user-level attribution.",
+    "display": "table",
+    "file": "sql/analytics/queries/20_traffic_funnel.sql"
+  },
+  {
+    "name": "ShopLakehouse \u00b7 Basket product pairs",
+    "description": "Co-purchased product pairs in delivered orders.",
+    "display": "table",
+    "file": "sql/analytics/queries/21_product_pairs.sql"
+  },
+  {
+    "name": "ShopLakehouse \u00b7 Customer revenue Pareto",
+    "description": "Cumulative observed spend share by customer rank.",
+    "display": "table",
+    "file": "sql/analytics/queries/22_pareto.sql"
+  },
+  {
+    "name": "ShopLakehouse \u00b7 Year over year",
+    "description": "Monthly same-month prior-year comparison; null where history is absent.",
+    "display": "table",
+    "file": "sql/analytics/queries/23_year_over_year.sql"
+  },
+  {
+    "name": "ShopLakehouse \u00b7 Seven-day revenue average",
+    "description": "Calendar-day average including zero-revenue dates.",
+    "display": "table",
+    "file": "sql/analytics/queries/24_moving_average.sql"
+  }
+]
